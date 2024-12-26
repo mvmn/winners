@@ -1,7 +1,10 @@
 <html>
 <head>
+<title>MVMn's lottery util</title>
 <script src="papaparse.min.js"></script>
-<script>
+<script>	
+    var lang = localStorage.getItem('language');
+	
 	async function handleInput() {
 	  const csvInput = document.getElementById("csvInput");
 
@@ -16,8 +19,46 @@
 	};
 	
 	function autoDetectDivider() {
-		alert("Not implemented yet!");
-		csvData
+		const rowsToSkip = getInputInt('headingRowsCountInput');
+		const colsToSkip = getInputInt('headingColumnsCountInput');
+		
+		const transposeData = getSelectorSelection('dataOrientation').key.toLowerCase() != 'false';
+		const sumIndex = getInputInt('sumIndex') - 1;
+
+		if (transposeData) {
+			for(var i = colsToSkip; i < csvData[sumIndex].length; i++) {
+				const sumRaw = csvData[sumIndex][i];
+				const divider = detectDivider(sumRaw);
+				if (divider) {
+					document.getElementById('dividerChar').value = divider;
+					return;
+				}
+			}
+		} else {
+			for(var i = rowsToSkip; i < csvData.length; i++) {
+				const row = csvData[i];
+				if (row.length > sumIndex && !(row.length == 1 && row[0] == '')) {
+					const sumRaw = row[sumIndex];
+					const divider = detectDivider(sumRaw);
+					if (divider) {
+						document.getElementById('dividerChar').value = divider;
+						return;
+					}	
+				}
+			}
+		}
+		alert(lang != 'uk'? "Divider not detected" : "Не вдалось визначити розділювач");
+	}
+	
+	function detectDivider(rawSum) {
+		rawSum = rawSum.replaceAll(/[^0-9\,\.]/g, '');
+		if (rawSum.indexOf(".")>=0 || rawSum.indexOf(",")>=0) {
+			const regexMatch = rawSum.match(/[\.\,]\d{1,2}$/g);
+			if (regexMatch) {
+				return regexMatch[0].substring(0, 1);
+			}
+		}
+		return null;
 	}
 
 	function getInputVal(inputId) {
@@ -31,6 +72,10 @@
 	function getSelectorSelection(selectorId) {
 		const selector = document.getElementById(selectorId);
 		return { key: selector.value, value: selector.options[selector.selectedIndex].value };
+	}
+	
+	function getBadSumMessage(row, col, val) {
+		return lang != 'uk' ? ('Bad sum at row ' + (1+row) + ' column ' + (1+col) + ': ' + val) : ('Некоректна сума в рядку ' + (1+row) + ' стовпці ' + (1+col) + ': ' + val);
 	}
 	
 	function calculateWinner() {
@@ -49,7 +94,7 @@
 			for(var i = colsToSkip; i < csvData[sumIndex].length; i++) {
 				const sum = parseFloat(sanitizeSumValue(csvData[sumIndex][i], dividerChar));
 				if(isNaN(sum)) {
-					alert('Bad sum at row ' + sumIndex + ' column ' + i + ': ' + csvData[sumIndex][i]);
+					alert(getBadSumMessage(sumIndex, i, csvData[sumIndex][i]));
 					return;
 				}
 				totalSum += sum;
@@ -61,7 +106,7 @@
 				if (row.length > sumIndex && !(row.length == 1 && row[0] == '')) {
 					const sum = parseFloat(sanitizeSumValue(row[sumIndex], dividerChar));
 					if(isNaN(sum)) {
-						alert('Bad sum at row ' + i + ' column ' + sumIndex + ': ' + row[sumIndex]);
+						alert(getBadSumMessage(i, sumIndex, row[sumIndex]));
 						return;
 					}
 					totalSum += sum;
@@ -155,6 +200,9 @@
 			const row = csvData[i];
 			html.push('<tr>')
 			for(var j in row) {
+				if (row.length < 1 || (row.length == 1 && row[0] == '')) {
+					continue;
+				}
 				const cell = row[j];
 				html.push('<td>');
 				html.push(cell);
@@ -176,6 +224,20 @@
 	function setSumIdx(index, isRow) {
 		document.getElementById('sumIndex').value = index;
 		document.getElementById('dataOrientation').selectedIndex = isRow ? 1 : 0;
+	}
+		
+	function applyTranslations() {
+		const spans = document.getElementsByTagName("span");
+		for (var i in spans) {
+			const span = spans[i];
+			if (!span.attributes || !span.attributes["tr_uk"]) {
+				continue;
+			}
+			if(!span.attributes["tr_en"]) {
+	    		span.setAttribute("tr_en", span.innerText);
+			}
+			span.innerText = span.attributes["tr_" + lang].value;
+		}		
 	}
 	
 	window.addEventListener('load', function () {
@@ -203,6 +265,16 @@
 		      localStorage.setItem('theme', 'light');
 		    }
 		});
+		
+		document.getElementById('langToggle').addEventListener('click', function () {
+			const isEnglish = (!lang || lang == 'en');
+			lang = isEnglish ? 'uk' : 'en';
+			localStorage.setItem('language', lang);		
+			
+			applyTranslations();
+		});
+		
+		applyTranslations();
 	  });
 </script>
 <style>
@@ -216,7 +288,7 @@
 		filter: invert(1) hue-rotate(180deg);
 	}
 	
-    #optionsContainer {
+    .optionsContainer {
 	   display: flex;
 	   flex-direction: column;
 	   gap: 2px;
@@ -239,7 +311,7 @@
 	   flex: 2;
 	}
 	
-	.themeToggleContainer {
+	.topControlsContainer {
 		text-align: right;
 		float: right;
 		margin: 4px;
@@ -288,44 +360,53 @@
 </style>
 </head>
 <body>
-	<h4 class="themeToggleContainer">
+	<h4 class="topControlsContainer">
+		<span id="langToggle" tr_uk="English">Українська</span>
+		&nbsp;
 		<span id="theme-toggle" data-i18n="theme_toggle">☀️</span>
 	</h4>
 	<div class="mainContainer">
 		<div class="leftColumn">
-			<div><input id="csvInput" type="file" onchange="javascript:handleInput()" /></div>
-			<div id="optionsContainer" style="display: none">
+			<div class="optionsContainer">
+				<div class="form-row">
+					<label for="csvInput"><span tr_uk="CSV файл">CSV file</span>:</label>
+					<input id="csvInput" type="file" onchange="javascript:handleInput()" />
+				</div>
+			</div>
+			<div id="optionsContainer" class="optionsContainer" style="display: none">
 		        <div class="form-row">
-		            <label for="headingRowsCountInput">Heading rows:</label>
+		            <label for="headingRowsCountInput"><span tr_uk="Рядків заголовку">Heading rows</span>:</label>
 		            <input id="headingRowsCountInput" type="text" value="1" size="10" />
 		        </div>
 		        <div class="form-row">
-		            <label for="headingColumnsCountInput">Heading columns:</label>
+		            <label for="headingColumnsCountInput"><span tr_uk="Колонок заголовку">Heading columns</span>:</label>
 		            <input id="headingColumnsCountInput" type="text" value="0" size="10" />
 		        </div>
 		        <div class="form-row">
-		            <label for="dataOrientation">Data orientation:</label>
+		            <label for="dataOrientation"><span tr_uk="Орієнтація даних">Data orientation</span>:</label>
 		            <select id="dataOrientation">
-		                <option value="false">Columns</option>
-		                <option value="true">Rows</option>
+		                <option value="false"><span tr_uk="Колонки">Columns</span></option>
+		                <option value="true"><span tr_uk="Рядки">Rows</span></option>
 		            </select>
 		        </div>
 		        <div class="form-row">
-		            <label for="sumIndex">Row/column with sum:</label>
+		            <label for="sumIndex"><span tr_uk="Рядок/колонка із сумою">Row/column with sum</span>:</label>
 		            <input id="sumIndex" type="text" value="1" size="10" />
 		        </div>
 		        <div class="form-row">
-		            <label for="dividerChar">Divider:</label>
+		            <label for="dividerChar"><span tr_uk="Розділювач дробів">Fraction divider</span>:</label>
 		            <div>
-		                <input id="dividerChar" type="text" value="," size="5" />
-		                <button type="button" onclick="autoDetectDivider()" style="display: none">Auto-detect divider</button>
+		                <input id="dividerChar" type="text" value="." size="5" />
+		                <button type="button" onclick="autoDetectDivider()">
+							<span tr_uk="Автоматично визначити розділювач">Auto-detect divider</span>
+						</button>
 		            </div>
 		        </div>
 		        <div class="form-row">
-		            <label for="winCount">Number of winners:</label>
+		            <label for="winCount"><span tr_uk="Кількість переможців">Number of winners</span>:</label>
 		            <input id="winCount" type="text" value="3" size="10" />
 		        </div>
-				<input type="button" value="Calculate winners" onclick="calculateWinner()">
+				<button onclick="calculateWinner()"><span tr_uk="Підрахувати переможців">Calculate winners</span></button>
 			</div>
 			<hr/>
 			<div id="resultsContainer">
