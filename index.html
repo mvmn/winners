@@ -198,11 +198,11 @@
 		
 		for(var i in csvData) {
 			const row = csvData[i];
+			if (row.length < 1 || (row.length == 1 && row[0] == '')) {
+				continue;
+			}
 			html.push('<tr>')
 			for(var j in row) {
-				if (row.length < 1 || (row.length == 1 && row[0] == '')) {
-					continue;
-				}
 				const cell = row[j];
 				html.push('<td>');
 				html.push(cell);
