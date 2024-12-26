@@ -1,0 +1,338 @@
+<html>
+<head>
+<script src="papaparse.min.js"></script>
+<script>
+	async function handleInput() {
+	  const csvInput = document.getElementById("csvInput");
+
+	  if (csvInput.files.length > 0) {
+		  var text = await csvInput.files[0].text();
+		  window.csvData = Papa.parse(text).data;
+		  
+		  document.getElementById("optionsContainer").style = "display: flex";
+		  
+		  generatePreview();
+	  }
+	};
+	
+	function autoDetectDivider() {
+		alert("Not implemented yet!");
+		csvData
+	}
+
+	function getInputVal(inputId) {
+		return document.getElementById(inputId).value;
+	}
+	
+	function getInputInt(inputId) {
+		return parseInt(getInputVal(inputId));
+	}
+	
+	function getSelectorSelection(selectorId) {
+		const selector = document.getElementById(selectorId);
+		return { key: selector.value, value: selector.options[selector.selectedIndex].value };
+	}
+	
+	function calculateWinner() {
+		const rowsToSkip = getInputInt('headingRowsCountInput');
+		const colsToSkip = getInputInt('headingColumnsCountInput');
+		
+		const transposeData = getSelectorSelection('dataOrientation').key.toLowerCase() != 'false';
+		const sumIndex = getInputInt('sumIndex') - 1;
+		
+		const dividerChar = getInputVal('dividerChar');
+		var winCount = getInputInt('winCount');
+		
+		const playerData = [];
+		var totalSum = 0;
+		if (transposeData) {
+			for(var i = colsToSkip; i < csvData[sumIndex].length; i++) {
+				const sum = parseFloat(sanitizeSumValue(csvData[sumIndex][i], dividerChar));
+				if(isNaN(sum)) {
+					alert('Bad sum at row ' + sumIndex + ' column ' + i + ': ' + csvData[sumIndex][i]);
+					return;
+				}
+				totalSum += sum;
+				playerData.push({index: i, sum});
+			}
+		} else {
+			for(var i = rowsToSkip; i < csvData.length; i++) {
+				const row = csvData[i];
+				if (row.length > sumIndex && !(row.length == 1 && row[0] == '')) {
+					const sum = parseFloat(sanitizeSumValue(row[sumIndex], dividerChar));
+					if(isNaN(sum)) {
+						alert('Bad sum at row ' + i + ' column ' + sumIndex + ': ' + row[sumIndex]);
+						return;
+					}
+					totalSum += sum;
+					playerData.push({index: i, sum});
+				}
+			}
+		}
+		
+		const winners = [];
+		while (winCount-- > 0) {
+			const randomVal = totalSum * Math.random();
+			
+			var currentSum = 0;
+			var winnerData = null;
+			for (var i in playerData) {
+				const currentPlayerData = playerData[i];
+				currentSum += currentPlayerData.sum;
+				if (randomVal < currentSum) {
+					winnerData = currentPlayerData;
+					playerData.splice(i, 1);
+					break;
+				}
+			}
+			
+			if (winnerData) {
+				totalSum -= winnerData.sum;
+				winners.push(winnerData.index);
+			}
+		}
+		
+		var html = [];
+		if(winners.length > 0) {
+			html.push('<div>');
+			html.push('<table class="resultsTable"><thead>');
+			const headings = ['#'];
+			const winnerData0 = transposeData ? getColumnData(rowsToSkip, winners[0]) : csvData[winners[0]];
+			for(var n=0; n<winnerData0.length; n++) {
+				headings.push(getHeading(n, transposeData));
+			}
+			html.push('<tr><td>');
+			html.push(headings.join('</td><td>'));
+			html.push('</td></tr></thead><tbody>');
+			
+			for(var i in winners) {
+				const winnerData = transposeData ? getColumnData(rowsToSkip, winners[i]) : csvData[winners[i]];
+				const values = [(parseInt(i) + 1)];
+				for(var n in winnerData) {
+					values.push(winnerData[n]);
+				}
+				html.push('<tr><td>');
+				html.push(values.join('</td><td>'));
+				html.push('</td></tr>');
+			}
+			html.push('</tbody></table>');
+			html.push('</div>');
+			html.push("<hr/>");
+		}
+		
+		document.getElementById('resultsContainer').innerHTML = html.join('') + document.getElementById('resultsContainer').innerHTML;
+	}
+	
+	function getColumnData(rowSkip, columnIndex) {
+		const result = [];
+		for(var i = rowSkip; i < csvData.length; i++) {
+			const row = csvData[i];
+			if (row.length > 0 && !(row.length == 1 && row[0] == '')) {
+				result.push(row[columnIndex]);
+			}
+		}
+		return result;
+	}
+	
+	function sanitizeSumValue(sumValue, dividerChar) {
+		sumValue = sumValue.replaceAll(/[^0-9\,\.]/g, '');
+		if (dividerChar == '.') {
+			sumValue = sumValue.replaceAll(/,/g, '');			
+		} else {
+			sumValue = sumValue.replaceAll(/\./g, '').replaceAll(dividerChar, '.');
+		}
+		return sumValue;
+	}
+	
+	function getHeading(index, transposeData) {
+		return transposeData ? csvData[index][0] : csvData[0][index];
+	}
+	
+	function generatePreview() {
+		const html = ['<div class="previewContainer"><table class="previewTable">'];
+		
+		for(var i in csvData) {
+			const row = csvData[i];
+			html.push('<tr>')
+			for(var j in row) {
+				const cell = row[j];
+				html.push('<td>');
+				html.push(cell);
+				if (i == 0) {
+					html.push('&nbsp;<button value="V" onclick="setSumIdx('+ (parseInt(j)+1) +', false)">V</button>')
+				}
+				if (j == 0) {
+					html.push('&nbsp;<button value=">" onclick="setSumIdx('+ (parseInt(i)+1) +', true)">&gt;</button>')
+				}
+				html.push('</td>');
+			}
+			html.push('</tr>')
+		}
+		
+		html.push['</table></div>'];
+		document.getElementById('rightColumn').innerHTML = html.join('');
+	}
+	
+	function setSumIdx(index, isRow) {
+		document.getElementById('sumIndex').value = index;
+		document.getElementById('dataOrientation').selectedIndex = isRow ? 1 : 0;
+	}
+	
+	window.addEventListener('load', function () {
+	    let theme = localStorage.getItem('theme');
+  
+	    if (!theme) {
+	      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+	        theme = 'dark';
+	      } else {
+	        theme = 'light';
+	      }
+	      localStorage.setItem('theme', theme);
+	    }
+  
+	    if (theme === 'dark') {
+	      document.body.classList.add('dark-theme');
+	    }
+		
+		document.getElementById('theme-toggle').addEventListener('click', function () {
+		    document.body.classList.toggle('dark-theme');
+
+		    if (document.body.classList.contains('dark-theme')) {
+		      localStorage.setItem('theme', 'dark');
+		    } else {
+		      localStorage.setItem('theme', 'light');
+		    }
+		});
+	  });
+</script>
+<style>
+	body {
+		background-color: white;
+		font-family: sans-serif;
+	}
+	
+	.dark-theme {
+		background-color: black;
+		filter: invert(1) hue-rotate(180deg);
+	}
+	
+    #optionsContainer {
+	   display: flex;
+	   flex-direction: column;
+	   gap: 2px;
+	}
+
+	.form-row {
+	   display: flex;
+	   justify-content: space-between;
+	   align-items: center;
+	}
+
+	.form-row label {
+	   flex: 1;
+	   margin-right: 10px;
+	}
+
+	.form-row input,
+	.form-row select,
+	.form-row button {
+	   flex: 2;
+	}
+	
+	.themeToggleContainer {
+		text-align: right;
+		float: right;
+		margin: 4px;
+	}
+	
+	.resultsTable, .previewTable {
+		border-spacing: 0
+	}
+
+	.resultsTable td, .previewTable td {
+		border: solid 1px lightgreen;
+	}
+	
+	#resultsContainer {
+		overflow: auto;
+		max-width: 100%;
+	}
+	
+	.mainContainer {
+ 	   display: flex;
+ 	   gap: 0px;
+ 	   width: 100%;
+	}
+	
+	.leftColumn, .rightColumn {
+		padding: 4px;
+		box-sizing: border-box;
+	}
+	
+	.leftColumn {
+		flex: 0 0 30%;
+		max-width: 30%;
+	}
+
+	.rightColumn {
+		flex: 0 0 70%;
+		max-width: 70%;
+	}
+	
+	.previewContainer {
+		overflow: auto;
+		max-width: 100%;		
+		min-height: 600px;
+		max-height: 900px;
+	}
+</style>
+</head>
+<body>
+	<h4 class="themeToggleContainer">
+		<span id="theme-toggle" data-i18n="theme_toggle">☀️</span>
+	</h4>
+	<div class="mainContainer">
+		<div class="leftColumn">
+			<div><input id="csvInput" type="file" onchange="javascript:handleInput()" /></div>
+			<div id="optionsContainer" style="display: none">
+		        <div class="form-row">
+		            <label for="headingRowsCountInput">Heading rows:</label>
+		            <input id="headingRowsCountInput" type="text" value="1" size="10" />
+		        </div>
+		        <div class="form-row">
+		            <label for="headingColumnsCountInput">Heading columns:</label>
+		            <input id="headingColumnsCountInput" type="text" value="0" size="10" />
+		        </div>
+		        <div class="form-row">
+		            <label for="dataOrientation">Data orientation:</label>
+		            <select id="dataOrientation">
+		                <option value="false">Columns</option>
+		                <option value="true">Rows</option>
+		            </select>
+		        </div>
+		        <div class="form-row">
+		            <label for="sumIndex">Row/column with sum:</label>
+		            <input id="sumIndex" type="text" value="1" size="10" />
+		        </div>
+		        <div class="form-row">
+		            <label for="dividerChar">Divider:</label>
+		            <div>
+		                <input id="dividerChar" type="text" value="," size="5" />
+		                <button type="button" onclick="autoDetectDivider()" style="display: none">Auto-detect divider</button>
+		            </div>
+		        </div>
+		        <div class="form-row">
+		            <label for="winCount">Number of winners:</label>
+		            <input id="winCount" type="text" value="3" size="10" />
+		        </div>
+				<input type="button" value="Calculate winners" onclick="calculateWinner()">
+			</div>
+			<hr/>
+			<div id="resultsContainer">
+			</div>
+		</div>
+		<div class="rightColumn" id="rightColumn">
+		</div>
+	</div>
+</body>
+</html>
