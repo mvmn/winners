@@ -2,20 +2,40 @@
 <head>
 <title>MVMn's lottery util</title>
 <script src="papaparse.min.js"></script>
+<script src="exceljs.min.js"></script>
 <script>	
     var lang = localStorage.getItem('language');
 	
 	async function handleInput() {
-	  const csvInput = document.getElementById("csvInput");
+		const fileInput = document.getElementById("fileInput");
 
-	  if (csvInput.files.length > 0) {
-		  var text = await csvInput.files[0].text();
-		  window.csvData = Papa.parse(text).data;
-		  
-		  document.getElementById("optionsContainer").style = "display: flex";
-		  
-		  generatePreview();
-	  }
+		if (fileInput.files.length > 0) {
+			if (fileInput.files[0].name.toLowerCase().endsWith(".csv")) {
+				var text = await fileInput.files[0].text();
+				window.tableFileData = Papa.parse(text).data;
+
+				document.getElementById("optionsContainer").style = "display: flex";
+				generatePreview();
+			} else if (fileInput.files[0].name.toLowerCase().endsWith(".xlsx")) {
+				const workbook = new ExcelJS.Workbook();
+				const xlsxData = await workbook.xlsx.load(fileInput.files[0]);
+				
+				window.tableFileData = [];
+				for (var i = 1; i <= workbook.worksheets[0].rowCount; i++) {
+					const row = workbook.worksheets[0].getRow(i);
+					const cellData = [];
+					for (var j = 1; j <= row.cellCount; j++) {
+						cellData.push(row.getCell(j).text);
+					}
+					window.tableFileData.push(cellData);
+				}
+
+				document.getElementById("optionsContainer").style = "display: flex";
+				generatePreview();
+			} else {
+				alert(lang != 'uk'? "Unknown file format - only CSV and XLSX are supported" : "Невідомий формат файлу - підтримуються файли CSV та XLSX");
+			}
+		}
 	};
 	
 	function autoDetectDivider() {
@@ -26,8 +46,8 @@
 		const sumIndex = getInputInt('sumIndex') - 1;
 
 		if (transposeData) {
-			for(var i = colsToSkip; i < csvData[sumIndex].length; i++) {
-				const sumRaw = csvData[sumIndex][i];
+			for(var i = colsToSkip; i < tableFileData[sumIndex].length; i++) {
+				const sumRaw = tableFileData[sumIndex][i];
 				const divider = detectDivider(sumRaw);
 				if (divider) {
 					document.getElementById('dividerChar').value = divider;
@@ -35,8 +55,8 @@
 				}
 			}
 		} else {
-			for(var i = rowsToSkip; i < csvData.length; i++) {
-				const row = csvData[i];
+			for(var i = rowsToSkip; i < tableFileData.length; i++) {
+				const row = tableFileData[i];
 				if (row.length > sumIndex && !(row.length == 1 && row[0] == '')) {
 					const sumRaw = row[sumIndex];
 					const divider = detectDivider(sumRaw);
@@ -52,7 +72,7 @@
 	
 	function detectDivider(rawSum) {
 		rawSum = rawSum.replaceAll(/[^0-9\,\.]/g, '');
-		if (rawSum.indexOf(".")>=0 || rawSum.indexOf(",")>=0) {
+		if (rawSum.indexOf(".") >= 0 || rawSum.indexOf(",") >= 0) {
 			const regexMatch = rawSum.match(/[\.\,]\d{1,2}$/g);
 			if (regexMatch) {
 				return regexMatch[0].substring(0, 1);
@@ -91,18 +111,18 @@
 		const playerData = [];
 		var totalSum = 0;
 		if (transposeData) {
-			for(var i = colsToSkip; i < csvData[sumIndex].length; i++) {
-				const sum = parseFloat(sanitizeSumValue(csvData[sumIndex][i], dividerChar));
+			for(var i = colsToSkip; i < tableFileData[sumIndex].length; i++) {
+				const sum = parseFloat(sanitizeSumValue(tableFileData[sumIndex][i], dividerChar));
 				if(isNaN(sum)) {
-					alert(getBadSumMessage(sumIndex, i, csvData[sumIndex][i]));
+					alert(getBadSumMessage(sumIndex, i, tableFileData[sumIndex][i]));
 					return;
 				}
 				totalSum += sum;
 				playerData.push({index: i, sum});
 			}
 		} else {
-			for(var i = rowsToSkip; i < csvData.length; i++) {
-				const row = csvData[i];
+			for(var i = rowsToSkip; i < tableFileData.length; i++) {
+				const row = tableFileData[i];
 				if (row.length > sumIndex && !(row.length == 1 && row[0] == '')) {
 					const sum = parseFloat(sanitizeSumValue(row[sumIndex], dividerChar));
 					if(isNaN(sum)) {
@@ -142,7 +162,7 @@
 			html.push('<div>');
 			html.push('<table class="resultsTable"><thead>');
 			const headings = ['#'];
-			const winnerData0 = transposeData ? getColumnData(rowsToSkip, winners[0]) : csvData[winners[0]];
+			const winnerData0 = transposeData ? getColumnData(rowsToSkip, winners[0]) : tableFileData[winners[0]];
 			for(var n=0; n<winnerData0.length; n++) {
 				headings.push(getHeading(n, transposeData));
 			}
@@ -151,7 +171,7 @@
 			html.push('</td></tr></thead><tbody>');
 			
 			for(var i in winners) {
-				const winnerData = transposeData ? getColumnData(rowsToSkip, winners[i]) : csvData[winners[i]];
+				const winnerData = transposeData ? getColumnData(rowsToSkip, winners[i]) : tableFileData[winners[i]];
 				const values = [(parseInt(i) + 1)];
 				for(var n in winnerData) {
 					values.push(winnerData[n]);
@@ -170,8 +190,8 @@
 	
 	function getColumnData(rowSkip, columnIndex) {
 		const result = [];
-		for(var i = rowSkip; i < csvData.length; i++) {
-			const row = csvData[i];
+		for(var i = rowSkip; i < tableFileData.length; i++) {
+			const row = tableFileData[i];
 			if (row.length > 0 && !(row.length == 1 && row[0] == '')) {
 				result.push(row[columnIndex]);
 			}
@@ -190,14 +210,14 @@
 	}
 	
 	function getHeading(index, transposeData) {
-		return transposeData ? csvData[index][0] : csvData[0][index];
+		return transposeData ? tableFileData[index][0] : tableFileData[0][index];
 	}
 	
 	function generatePreview() {
 		const html = ['<div class="previewContainer"><table class="previewTable">'];
 		
-		for(var i in csvData) {
-			const row = csvData[i];
+		for(var i in tableFileData) {
+			const row = tableFileData[i];
 			if (row.length < 1 || (row.length == 1 && row[0] == '')) {
 				continue;
 			}
@@ -369,8 +389,8 @@
 		<div class="leftColumn">
 			<div class="optionsContainer">
 				<div class="form-row">
-					<label for="csvInput"><span tr_uk="CSV файл">CSV file</span>:</label>
-					<input id="csvInput" type="file" onchange="javascript:handleInput()" />
+					<label for="fileInput"><span tr_uk="XLSX чи CSV файл">XLSX or CSV file</span>:</label>
+					<input id="fileInput" type="file" onchange="javascript:handleInput()" />
 				</div>
 			</div>
 			<div id="optionsContainer" class="optionsContainer" style="display: none">
